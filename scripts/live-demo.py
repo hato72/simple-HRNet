@@ -7,6 +7,7 @@ import time
 import torch
 from vidgear.gears import CamGear
 import numpy as np
+from GaitPhaseDetector import *
 
 sys.path.insert(1, os.getcwd())
 from SimpleHRNet import SimpleHRNet
@@ -84,6 +85,15 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
         enable_tensorrt=enable_tensorrt
     )
 
+    phase_detector = GaitPhaseDetector(
+        touchdown_angle=100,  # 接地時の目標角度
+        takeoff_angle=175,   # 離地時の目標角度
+        angle_tolerance=10   # 許容誤差
+    )
+    save_dir = "gait_images"  # 保存ディレクトリ
+    os.makedirs(save_dir, exist_ok=True)
+
+
     if not disable_tracking:
         prev_boxes = None
         prev_pts = None
@@ -139,18 +149,48 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
             
             hip_angle, knee_angle = calculate_angles(pt)
             # 角度をフレームに表示
-            cv2.putText(frame, f'Hip Angle: {hip_angle:.1f}deg', 
-                    (int(pt[11][0]), int(pt[11][1])-10),  # 股関節の近く
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            cv2.putText(frame, f'Knee Angle: {knee_angle:.1f}deg',
-                    (int(pt[12][0]), int(pt[12][1])-10),  # 膝の近く
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            # cv2.putText(frame, f'Hip Angle: {hip_angle:.1f}deg', 
+            #         (int(pt[11][0]), int(pt[11][1])-10),  # 股関節の近く
+            #         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            # cv2.putText(frame, f'Knee Angle: {knee_angle:.1f}deg',
+            #         (int(pt[12][0]), int(pt[12][1])-10),  # 膝の近く
+            #         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         # for box in boxes:
         #     cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),(255,255,255),2)
 
-        fps = 1. / (time.time() - t)
-        print('\rframerate: %f fps, for %d person(s) ' % (fps,len(pts)), end='')
+
+        if len(pts) > 0:
+            # 人物が検出された場合の処理
+            keypoints = pts[0]  # 最初の検出人物のみ使用
+            phase_change, knee_angle = phase_detector.detect_phase_change(keypoints)
+            
+            # 常に膝関節角度を表示
+            frame_with_info = frame.copy()
+            cv2.putText(frame_with_info, 
+                      f"Knee Angle: {knee_angle:.1f}", 
+                      (10, 30),  # 左上に固定
+                      cv2.FONT_HERSHEY_SIMPLEX, 
+                      1, 
+                      (0, 255, 0), 
+                      2)
+            cv2.putText(frame_with_info, 
+                      f"Hip Angle: {hip_angle:.1f}", 
+                      (10, 70),  # 膝関節角度の下に表示
+                      cv2.FONT_HERSHEY_SIMPLEX, 
+                      1, 
+                      (0, 255, 0), 
+                      2)
+            
+            if phase_change:
+                sequence_num, event = phase_change
+                # イベントが検出されたら画像を保存
+                filename = f"gait_sequence_{sequence_num:03d}_{event}.jpg"
+                filepath = os.path.join(save_dir, filename)
+                
+                cv2.imwrite(filepath, frame_with_info)
+                print(f"Saved {filename} - Knee angle: {knee_angle:.1f}")
+                print(f"Saved {filename} - Hip angle: {hip_angle:.1f}")
 
         if has_display:
             cv2.imshow('frame.png', frame)
