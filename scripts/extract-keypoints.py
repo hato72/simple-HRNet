@@ -11,6 +11,7 @@ import torch
 sys.path.insert(1, os.getcwd())
 from SimpleHRNet import SimpleHRNet
 from misc.visualization import check_video_rotation
+from misc.utils import calculate_angles
 
 
 def main(format, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, image_resolution, single_person, yolo_version,

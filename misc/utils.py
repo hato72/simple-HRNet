@@ -5,6 +5,57 @@ import numpy as np
 import torch
 
 
+def calculate_angles(keypoints):
+    """
+    姿勢の角度を計算する関数
+    keypoints: 検出された関節のキーポイント
+    returns: (hip_angle, knee_angle) - 股関節角度と膝関節角度のタプル
+    """
+    # COCOフォーマットのキーポイントインデックス
+    HIP = 11  # 右股関節
+    KNEE = 12 # 右膝
+    ANKLE = 13 # 右足首
+    
+    def get_angle(p1, p2, p3):
+        """3点から角度を計算"""
+        import math
+        
+        # ベクトルを計算
+        vector1 = [p1[0] - p2[0], p1[1] - p2[1]]
+        vector2 = [p3[0] - p2[0], p3[1] - p2[1]]
+        
+        # 内積を計算
+        dot_product = vector1[0] * vector2[0] + vector1[1] * vector2[1]
+        
+        # ベクトルの大きさを計算
+        magnitude1 = math.sqrt(vector1[0]**2 + vector1[1]**2)
+        magnitude2 = math.sqrt(vector2[0]**2 + vector2[1]**2)
+        
+        # 角度を計算（ラジアンから度に変換）
+        cos_angle = dot_product / (magnitude1 * magnitude2)
+        angle = math.degrees(math.acos(max(-1.0, min(1.0, cos_angle))))
+        
+        return angle
+
+    # 股関節角度を計算（お腹側から脚までの角度）
+    hip_angle = 180 - get_angle(
+        [keypoints[KNEE][0], keypoints[KNEE][1]],  # 膝
+        [keypoints[HIP][0], keypoints[HIP][1]],    # 股関節
+        [keypoints[HIP][0], keypoints[HIP][1]-10]  # 股関節の真上の点
+    )
+    
+    # 膝関節角度を計算（膝の裏側の角度）
+    knee_angle = get_angle(
+        [keypoints[HIP][0], keypoints[HIP][1]],    # 股関節
+        [keypoints[KNEE][0], keypoints[KNEE][1]],  # 膝
+        [keypoints[ANKLE][0], keypoints[ANKLE][1]] # 足首
+    )
+    
+    return hip_angle, knee_angle
+
+
+
+
 # solution proposed in https://github.com/pytorch/pytorch/issues/229#issuecomment-299424875 
 def flip_tensor(tensor, dim=0):
     """

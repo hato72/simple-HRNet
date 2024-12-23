@@ -11,7 +11,7 @@ import numpy as np
 sys.path.insert(1, os.getcwd())
 from SimpleHRNet import SimpleHRNet
 from misc.visualization import draw_points, draw_skeleton, draw_points_and_skeleton, joints_dict, check_video_rotation
-from misc.utils import find_person_id_associations
+from misc.utils import find_person_id_associations,calculate_angles
 
 
 def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set, image_resolution,
@@ -136,6 +136,15 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
             frame = draw_points_and_skeleton(frame, pt, joints_dict()[hrnet_joints_set]['skeleton'], person_index=pid,
                                              points_color_palette='gist_rainbow', skeleton_color_palette='jet',
                                              points_palette_samples=10)
+            
+            hip_angle, knee_angle = calculate_angles(pt)
+            # 角度をフレームに表示
+            cv2.putText(frame, f'Hip Angle: {hip_angle:.1f}deg', 
+                    (int(pt[11][0]), int(pt[11][1])-10),  # 股関節の近く
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.putText(frame, f'Knee Angle: {knee_angle:.1f}deg',
+                    (int(pt[12][0]), int(pt[12][1])-10),  # 膝の近く
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         # for box in boxes:
         #     cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),(255,255,255),2)
