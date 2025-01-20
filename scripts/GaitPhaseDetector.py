@@ -63,7 +63,7 @@ import numpy as np
 from collections import deque
 
 class GaitPhaseDetector:
-    def __init__(self, touchdown_angle=100, takeoff_angle=175, angle_tolerance=10):
+    def __init__(self, touchdown_angle=175, takeoff_angle=80, angle_tolerance=10):
         self.touchdown_angle = touchdown_angle
         self.takeoff_angle = takeoff_angle
         self.angle_tolerance = angle_tolerance
@@ -71,6 +71,8 @@ class GaitPhaseDetector:
         self.last_state = None
         self.min_frames_between_detections = 10
         self.frames_since_last_detection = 0
+        self.min_frames_between_detections = 3  # 検出間隔を短縮
+        self.debug = True  # デバッグ用フラグ
         
     def calculate_knee_angle(self, keypoints):
         # COCOフォーマットでのインデックス
@@ -99,27 +101,36 @@ class GaitPhaseDetector:
     def detect_phase_change(self, keypoints):
         self.frames_since_last_detection += 1
         
-        # 膝関節角度を計算
+        if keypoints is None or len(keypoints) < 14:
+            return None, 0
+            
         knee_angle = self.calculate_knee_angle(keypoints)
         
-        # 最小フレーム間隔をチェック
+        # デバッグ用出力
+        if self.debug:
+            print(f"Current knee angle: {knee_angle:.1f}")
+            print(f"Last state: {self.last_state}")
+            print(f"Frames since last: {self.frames_since_last_detection}")
+        
         if self.frames_since_last_detection < self.min_frames_between_detections:
             return None, knee_angle
             
-        # 接地判定（膝角度が約100度）
-        if (abs(knee_angle - self.touchdown_angle) < self.angle_tolerance and 
-            self.last_state != "touchdown"):
-            self.last_state = "touchdown"
-            self.frames_since_last_detection = 0
-            return (self.sequence_number, "touchdown"), knee_angle
-            
-        # 離地判定（膝角度が約180度）
-        elif (abs(knee_angle - self.takeoff_angle) < self.angle_tolerance and 
-              self.last_state != "takeoff"):
+        # 着地判定の条件を微調整
+        knee_range = 20  # 許容範囲を広げる
+        if ((self.takeoff_angle - knee_range <= knee_angle <= self.takeoff_angle + knee_range) and
+            self.last_state != "takeoff"):
             self.last_state = "takeoff"
             self.frames_since_last_detection = 0
-            self.sequence_number += 1
             return (self.sequence_number, "takeoff"), knee_angle
+            
+        # elif (abs(knee_angle - self.touchdown_angle) < self.angle_tolerance and 
+        #       self.last_state != "down"):
+        elif ((self.takeoff_angle - self.angle_tolerance <= knee_angle <= self.takeoff_angle + self.angle_tolerance) and
+            self.last_state != "down"):
+            self.last_state = "down"
+            self.frames_since_last_detection = 0
+            self.sequence_number += 1
+            return (self.sequence_number, "down"), knee_angle
             
         return None, knee_angle
 

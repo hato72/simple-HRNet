@@ -68,6 +68,11 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
     else:
         raise ValueError('Unsopported YOLO version.')
 
+    # フレームレートの取得と設定
+    original_fps = video.get(cv2.CAP_PROP_FPS)
+    target_fps = original_fps * 2  # 例: フレームレートを2倍に
+    video.set(cv2.CAP_PROP_FPS, target_fps)
+
     model = SimpleHRNet(
         hrnet_c,
         hrnet_j,
@@ -92,6 +97,16 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
     )
     save_dir = "gait_images"  # 保存ディレクトリ
     os.makedirs(save_dir, exist_ok=True)
+
+    detection_threshold = 0.1  # 例: しきい値を下げる
+    model.detector_confidence_thresh = detection_threshold
+
+    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = video.get(cv2.CAP_PROP_FPS)
+    output_path = 'output_pose.mp4'
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
 
     if not disable_tracking:
@@ -204,14 +219,23 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
         else:
             cv2.imwrite('frame.png', frame)
 
-        if save_video:
-            if video_writer is None:
-                fourcc = cv2.VideoWriter_fourcc(*video_format)  # video format
-                video_writer = cv2.VideoWriter('output.avi', fourcc, video_framerate, (frame.shape[1], frame.shape[0]))
-            video_writer.write(frame)
-
+        if pts is not None:
+            for person in pts:
+                # キーポイントの描画
+                for i, pt in enumerate(person):
+                    cv2.circle(frame, (int(pt[0]), int(pt[1])), 3, (0, 255, 0), -1)
+                
+                # 骨格線の描画（右足）
+                pairs = [(12, 14), (14, 16)]  # 右股関節→右膝→右足首
+                for pair in pairs:
+                    pt1 = person[pair[0]]
+                    pt2 = person[pair[1]]
+                    cv2.line(frame, (int(pt1[0]), int(pt1[1])), 
+                            (int(pt2[0]), int(pt2[1])), (0, 255, 0), 2)
+        out.write(frame)
     if save_video:
-        video_writer.release()
+        output_video.release()
+    video.release()
 
 
 if __name__ == '__main__':

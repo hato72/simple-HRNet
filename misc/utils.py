@@ -11,48 +11,47 @@ def calculate_angles(keypoints):
     keypoints: 検出された関節のキーポイント
     returns: (hip_angle, knee_angle) - 股関節角度と膝関節角度のタプル
     """
-    # COCOフォーマットのキーポイントインデックス
     HIP = 11  # 右股関節
     KNEE = 12 # 右膝
     ANKLE = 13 # 右足首
     
     def get_angle(p1, p2, p3):
         """3点から角度を計算"""
-        import math
+        a = np.array(p1)
+        b = np.array(p2)
+        c = np.array(p3)
         
-        # ベクトルを計算
-        vector1 = [p1[0] - p2[0], p1[1] - p2[1]]
-        vector2 = [p3[0] - p2[0], p3[1] - p2[1]]
+        ba = a - b
+        bc = c - b
         
-        # 内積を計算
-        dot_product = vector1[0] * vector2[0] + vector1[1] * vector2[1]
-        
-        # ベクトルの大きさを計算
-        magnitude1 = math.sqrt(vector1[0]**2 + vector1[1]**2)
-        magnitude2 = math.sqrt(vector2[0]**2 + vector2[1]**2)
-        
-        # 角度を計算（ラジアンから度に変換）
-        cos_angle = dot_product / (magnitude1 * magnitude2)
-        angle = math.degrees(math.acos(max(-1.0, min(1.0, cos_angle))))
-        
-        return angle
+        # cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
+        # angle = np.degrees(np.arccos(np.clip(cosine_angle, -1.0, 1.0)))
 
-    # 股関節角度を計算（お腹側から脚までの角度）
-    hip_angle = 180 - get_angle(
-        [keypoints[KNEE][0], keypoints[KNEE][1]],  # 膝
-        [keypoints[HIP][0], keypoints[HIP][1]],    # 股関節
-        [keypoints[HIP][0], keypoints[HIP][1]-10]  # 股関節の真上の点
+        # 0除算を防ぐ
+        norm_ba = np.linalg.norm(ba)
+        norm_bc = np.linalg.norm(bc)
+        
+        if norm_ba < 1e-10 or norm_bc < 1e-10:
+            return 0.0
+            
+        cosine_angle = np.dot(ba, bc) / (norm_ba * norm_bc)
+        cosine_angle = np.clip(cosine_angle, -1.0, 1.0)  # 数値安定性のため
+        angle = np.degrees(np.arccos(cosine_angle))
+        return angle
+    
+    hip_angle = get_angle(
+        [keypoints[HIP][0], keypoints[HIP][1]],
+        [keypoints[HIP][0], keypoints[HIP][1]-10],
+        [keypoints[KNEE][0], keypoints[KNEE][1]]
     )
     
-    # 膝関節角度を計算（膝の裏側の角度）
     knee_angle = get_angle(
-        [keypoints[HIP][0], keypoints[HIP][1]],    # 股関節
-        [keypoints[KNEE][0], keypoints[KNEE][1]],  # 膝
-        [keypoints[ANKLE][0], keypoints[ANKLE][1]] # 足首
+        [keypoints[HIP][0], keypoints[HIP][1]],
+        [keypoints[KNEE][0], keypoints[KNEE][1]],
+        [keypoints[ANKLE][0], keypoints[ANKLE][1]]
     )
     
     return hip_angle, knee_angle
-
 
 
 
