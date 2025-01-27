@@ -115,6 +115,8 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
         prev_person_ids = None
         next_person_id = 0
     t_start = time.time()
+    frame_count = 0
+
     while True:
         t = time.time()
 
@@ -132,6 +134,8 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
                 break
 
         pts = model.predict(frame)
+
+        frame_count += 1
 
         if not disable_tracking:
             boxes, pts = pts
@@ -178,7 +182,7 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
         if len(pts) > 0:
             # 人物が検出された場合の処理
             keypoints = pts[0]  # 最初の検出人物のみ使用
-            phase_change, knee_angle = phase_detector.detect_phase_change(keypoints)
+            phase_change, knee_angle = phase_detector.detect_phase_change(keypoints,frame_count)
             
             # 常に膝関節角度を表示
             frame_with_info = frame.copy()
@@ -233,9 +237,12 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
                     cv2.line(frame, (int(pt1[0]), int(pt1[1])), 
                             (int(pt2[0]), int(pt2[1])), (0, 255, 0), 2)
         out.write(frame)
-    if save_video:
-        output_video.release()
+
+    # if save_video:
+    #     output_video.release()
     video.release()
+    accuracy = phase_detector.compare_frames([12,20,51,65,96,108,142,158])
+    print(f"Accuracy: {accuracy:.2f}")
 
 
 if __name__ == '__main__':

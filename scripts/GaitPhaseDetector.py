@@ -73,6 +73,7 @@ class GaitPhaseDetector:
         self.frames_since_last_detection = 0
         self.min_frames_between_detections = 3  # 検出間隔を短縮
         self.debug = True  # デバッグ用フラグ
+        self.detected_frames = []
         
     def calculate_knee_angle(self, keypoints):
         # COCOフォーマットでのインデックス
@@ -98,7 +99,7 @@ class GaitPhaseDetector:
         
         return angle
         
-    def detect_phase_change(self, keypoints):
+    def detect_phase_change(self, keypoints, frame_count):
         self.frames_since_last_detection += 1
         
         if keypoints is None or len(keypoints) < 14:
@@ -121,8 +122,12 @@ class GaitPhaseDetector:
             self.last_state != "takeoff"):
             self.last_state = "takeoff"
             self.frames_since_last_detection = 0
+            self.detected_frames.append(frame_count)  
+            # print("Takeoff detected at takeoff frame", frame_count)
+            # モデル出力：13,64,184
+            # 20,65,108,158
             return (self.sequence_number, "takeoff"), knee_angle
-            
+
         # elif (abs(knee_angle - self.touchdown_angle) < self.angle_tolerance and 
         #       self.last_state != "down"):
         elif ((self.takeoff_angle - self.angle_tolerance <= knee_angle <= self.takeoff_angle + self.angle_tolerance) and
@@ -130,11 +135,35 @@ class GaitPhaseDetector:
             self.last_state = "down"
             self.frames_since_last_detection = 0
             self.sequence_number += 1
+            self.detected_frames.append(frame_count)  
+            # print("Takeoff detected at touchdown frame", frame_count)
+            # モデル出力：10,52,142
+            #12,51,96,142
             return (self.sequence_number, "down"), knee_angle
             
         return None, knee_angle
-
-
+    
+    def compare_frames(self, manual_frames, threshold=3):
+        correct_detections = 0
+        matched_frames = []  # デバッグ用：マッチしたフレームのペアを保存
+    
+        for manual_frame in manual_frames:
+            found_match = False
+            for detected_frame in self.detected_frames:
+                if abs(manual_frame - detected_frame) <= threshold:
+                    correct_detections += 1
+                    matched_frames.append((manual_frame, detected_frame))
+                    found_match = True
+                    break
+            if not found_match:
+                print(f"No match found for manual frame: {manual_frame}")
+        
+        accuracy = correct_detections / len(manual_frames) if manual_frames else 0
+        print(f"Manual frames: {manual_frames}")
+        print(f"Detected frames: {self.detected_frames}")
+        print(f"Matched pairs: {matched_frames}")
+        # print(f"Accuracy: {accuracy:.2%} ({correct_detections}/{len(manual_frames)})")
+        return accuracy
 
 
 # import numpy as np
