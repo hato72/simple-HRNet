@@ -12,6 +12,13 @@ python3  scripts/live-demo.py --filename running.mp4
 
 https://qiita.com/relu/items/81349a9bc0517c0e862a
 
+device name：hattori72-System-Product-Name
+
+remote desktop adress：
+ms-rd://hattori72-System-Product-Name.local
+username:hako
+password:ubuntuko11
+
 def check_joint_angles(phase_change, hip_angle, knee_angle):
     """関節角度をチェックして問題点を返す"""
     feedback = []
