@@ -75,7 +75,7 @@ class GaitPhaseDetector:
         self.debug = True  # デバッグ用フラグ
         self.detected_frames = []
         
-    def calculate_knee_angle(self, keypoints):
+    def calculate_angles(self, keypoints):
         # COCOフォーマットでのインデックス
         RIGHT_HIP = 12
         RIGHT_KNEE = 14
@@ -94,18 +94,35 @@ class GaitPhaseDetector:
         magnitude1 = np.sqrt(vector1[0]**2 + vector1[1]**2)
         magnitude2 = np.sqrt(vector2[0]**2 + vector2[1]**2)
         
-        cos_angle = dot_product / (magnitude1 * magnitude2)
-        angle = np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
+        # cos_angle = dot_product / (magnitude1 * magnitude2)
+        # angle = np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
         
-        return angle
+        # return angle
+
+        knee_angle = np.degrees(np.arccos(np.clip(dot_product / (magnitude1 * magnitude2), -1.0, 1.0)))
+
+        # 股関節角度の計算
+        vertical = [0, -1]  # 上向きの垂直ベクトル
+        thigh_vector = [knee[0] - hip[0], knee[1] - hip[1]]
+        
+        dot_product = vertical[0] * thigh_vector[0] + vertical[1] * thigh_vector[1]
+        magnitude_thigh = np.sqrt(thigh_vector[0]**2 + thigh_vector[1]**2)
+        
+        hip_angle = np.degrees(np.arccos(np.clip(dot_product / magnitude_thigh, -1.0, 1.0)))
+        
+        # 大腿部が垂直線の左側にある場合の補正
+        if thigh_vector[0] < 0:
+            hip_angle = 360 - hip_angle
+
+        return hip_angle, knee_angle
         
     def detect_phase_change(self, keypoints, frame_count):
         self.frames_since_last_detection += 1
         
         if keypoints is None or len(keypoints) < 14:
-            return None, 0
+            return None, 0,0
             
-        knee_angle = self.calculate_knee_angle(keypoints)
+        hip_angle,knee_angle = self.calculate_angles(keypoints)
         
         # デバッグ用出力
         if self.debug:
@@ -114,7 +131,7 @@ class GaitPhaseDetector:
             print(f"Frames since last: {self.frames_since_last_detection}")
         
         if self.frames_since_last_detection < self.min_frames_between_detections:
-            return None, knee_angle
+            return None, knee_angle,hip_angle
             
         # 着地判定の条件を微調整
         knee_range = 20  # 許容範囲を広げる
@@ -126,7 +143,7 @@ class GaitPhaseDetector:
             # print("Takeoff detected at takeoff frame", frame_count)
             # モデル出力：13,64,184
             # 20,65,108,158
-            return (self.sequence_number, "takeoff"), knee_angle
+            return (self.sequence_number, "takeoff"), knee_angle,hip_angle
 
         # elif (abs(knee_angle - self.touchdown_angle) < self.angle_tolerance and 
         #       self.last_state != "down"):
@@ -139,9 +156,9 @@ class GaitPhaseDetector:
             # print("Takeoff detected at touchdown frame", frame_count)
             # モデル出力：10,52,142
             #12,51,96,142
-            return (self.sequence_number, "down"), knee_angle
+            return (self.sequence_number, "down"), knee_angle,hip_angle
             
-        return None, knee_angle
+        return None, knee_angle,hip_angle
     
     def compare_frames(self, manual_frames, threshold=3):
         correct_detections = 0
