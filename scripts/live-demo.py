@@ -13,6 +13,7 @@ sys.path.insert(1, os.getcwd())
 from SimpleHRNet import SimpleHRNet
 from misc.visualization import draw_points, draw_skeleton, draw_points_and_skeleton, joints_dict, check_video_rotation
 from misc.utils import find_person_id_associations,calculate_angles
+from PIL import ImageFont, ImageDraw, Image
 
 
 def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set, image_resolution,
@@ -178,11 +179,54 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
         # for box in boxes:
         #     cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),(255,255,255),2)
 
+        def check_joint_angles(phase_change, hip_angle, knee_angle):
+            """関節角度をチェックして問題点を返す"""
+            feedback = []
+            
+            if phase_change:
+                sequence_num, event = phase_change
+                if event == "takeoff":
+                    # 離地時の角度チェック
+                    if not 150 <= hip_angle <= 170:  # 160±10
+                        feedback.append(f"Hip joint angle at takeoff: {hip_angle:.1f} (Target: 150-170)")
+                    if not 145 <= knee_angle <= 175:  # 160±15
+                        feedback.append(f"Knee joint angle at takeoff: {knee_angle:.1f} (Target: 145-175)")
+                        
+                elif event == "down":
+                    # 接地時の角度チェック
+                    if not 100 <= knee_angle <= 140:  # 120±20
+                        feedback.append(f"Knee joint angle at touchdown: {knee_angle:.1f} (Target: 100-140)")
+                        
+            return feedback
+        
+        def draw_feedback(image, feedback):
+            # OpenCVの画像をPillowに変換
+            img_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            draw = ImageDraw.Draw(img_pil)
+
+            # 日本語対応フォントを指定
+            font = ImageFont.truetype("C:/Windows/Fonts/meiryo.ttc", 20)  # フォントパスを指定
+
+            y_offset = 10
+            for message in feedback:
+                draw.text((10, y_offset), message, font=font, fill=(255, 255, 255))
+                y_offset += 30  # 次の行に移動
+
+            # Pillowの画像をOpenCV形式に変換
+            image = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+            return image
 
         if len(pts) > 0:
             # 人物が検出された場合の処理
             keypoints = pts[0]  # 最初の検出人物のみ使用
-            phase_change, knee_angle = phase_detector.detect_phase_change(keypoints,frame_count)
+            phase_change, knee_angle,hip_angles = phase_detector.detect_phase_change(keypoints,frame_count)
+
+            # 角度を右上に表示
+            frame_with_info = frame.copy()
+            
+            # 右上の座標を計算
+            text_x = frame.shape[1] - 250  # 右端から250ピクセル
+            text_y_start = 30  # 上端から30ピクセル
             
             # 常に膝関節角度を表示
             frame_with_info = frame.copy()
@@ -194,12 +238,23 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
                       (0, 255, 0), 
                       2)
             cv2.putText(frame_with_info, 
-                      f"Hip Angle: {hip_angle:.1f}", 
+                      f"Hip Angle: {hip_angles:.1f}", 
                       (10, 70),  # 膝関節角度の下に表示
                       cv2.FONT_HERSHEY_SIMPLEX, 
                       1, 
                       (0, 255, 0), 
                       2)
+            
+            # フィードバックを表示
+            # feedback = check_joint_angles(phase_change, hip_angles, knee_angle)
+            # for i, text in enumerate(feedback):
+            #     cv2.putText(frame_with_info,
+            #             text,
+            #             (10, frame.shape[0] - 30 - i*30),  # 下端から順に表示
+            #             cv2.FONT_HERSHEY_SIMPLEX,
+            #             0.7, (0, 0, 255), 2)  # 赤色で表示
+            feedback = check_joint_angles(phase_change, hip_angles, knee_angle)
+            frame_with_info = draw_feedback(frame_with_info, feedback)
             
             if phase_change:
                 sequence_num, event = phase_change
@@ -209,7 +264,7 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
                 
                 cv2.imwrite(filepath, frame_with_info)
                 print(f"Saved {filename} - Knee angle: {knee_angle:.1f}")
-                print(f"Saved {filename} - Hip angle: {hip_angle:.1f}")
+                print(f"Saved {filename} - Hip angle: {hip_angles:.1f}")
 
         if has_display:
             cv2.imshow('frame.png', frame)
