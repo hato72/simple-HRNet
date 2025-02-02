@@ -1,5 +1,7 @@
 python3  scripts/live-demo.py --filename running.mp4
 
+python3  scripts/live-demo.py --filename movie/a1.mp4
+
 
 ## タスク
 股関節と膝関節の角度計測(たぶんできてる)
