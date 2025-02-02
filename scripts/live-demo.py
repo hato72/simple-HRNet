@@ -13,7 +13,7 @@ sys.path.insert(1, os.getcwd())
 from SimpleHRNet import SimpleHRNet
 from misc.visualization import draw_points, draw_skeleton, draw_points_and_skeleton, joints_dict, check_video_rotation
 from misc.utils import find_person_id_associations,calculate_angles
-from PIL import ImageFont, ImageDraw, Image
+from PIL import Image, ImageDraw, ImageFont
 
 
 def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_joints_set, image_resolution,
@@ -92,11 +92,15 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
     )
 
     phase_detector = GaitPhaseDetector(
-        touchdown_angle=100,  # 接地時の目標角度
-        takeoff_angle=175,   # 離地時の目標角度
+        touchdown_angle=90,  # 接地時の目標角度
+        takeoff_angle=165,   # 離地時の目標角度
         angle_tolerance=10   # 許容誤差
     )
-    save_dir = "gait_images"  # 保存ディレクトリ
+    #save_dir = "gait_images"  # 保存ディレクトリ
+    #save_dir = "a_result"  # 保存ディレクトリ
+    #save_dir = "b1_result"  # 保存ディレクトリ
+    save_dir = "b2_result"  # 保存ディレクトリ
+    #save_dir = "b4_result"  # 保存ディレクトリ
     os.makedirs(save_dir, exist_ok=True)
 
     detection_threshold = 0.1  # 例: しきい値を下げる
@@ -179,47 +183,115 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
         # for box in boxes:
         #     cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),(255,255,255),2)
 
+        # def check_joint_angles(phase_change, hip_angle, knee_angle):
+        #     """関節角度をチェックして問題点を返す"""
+        #     feedback = []
+            
+        #     if phase_change:
+        #         sequence_num, event = phase_change
+        #         if event == "takeoff":
+        #             # 離地時の角度チェック
+        #             if not 150 <= hip_angle <= 170:  # 160±10
+        #                 feedback.append(f"Hip joint angle at takeoff: {hip_angle:.1f} (Target: 150-170)")
+        #             if not 145 <= knee_angle <= 175:  # 160±15
+        #                 feedback.append(f"Knee joint angle at takeoff: {knee_angle:.1f} (Target: 145-175)")
+                        
+        #         elif event == "down":
+        #             # 接地時の角度チェック
+        #             if not 100 <= knee_angle <= 140:  # 120±20
+        #                 feedback.append(f"Knee joint angle at touchdown: {knee_angle:.1f} (Target: 100-140)")
+                        
+        #     return feedback
+        from typing import List
+        def put_japanese_text(img: np.ndarray, text: str, org: tuple, font_size: int, color: tuple) -> np.ndarray:
+            """日本語テキストを画像に描画する関数"""
+            # テキストを□に変換せずに表示
+            img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            draw = ImageDraw.Draw(img_pil)
+            font = ImageFont.truetype('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', font_size)
+            draw.text(org, text, font=font, fill=color)
+            return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+
+
+        # 理想的な角度の定数定義
+        TAKEOFF_HIP_IDEAL = 160  # 離地時の股関節の理想角度
+        TAKEOFF_KNEE_IDEAL = 160  # 離地時の膝関節の理想角度
+        TOUCHDOWN_KNEE_IDEAL = 120  # 接地時の膝関節の理想角度
+
         def check_joint_angles(phase_change, hip_angle, knee_angle):
-            """関節角度をチェックして問題点を返す"""
+            """関節角度をチェックして詳細なフィードバックを返す"""
             feedback = []
             
             if phase_change:
                 sequence_num, event = phase_change
                 if event == "takeoff":
-                    # 離地時の角度チェック
-                    if not 150 <= hip_angle <= 170:  # 160±10
-                        feedback.append(f"Hip joint angle at takeoff: {hip_angle:.1f} (Target: 150-170)")
-                    if not 145 <= knee_angle <= 175:  # 160±15
-                        feedback.append(f"Knee joint angle at takeoff: {knee_angle:.1f} (Target: 145-175)")
+                    # 離地時の股関節角度チェック
+                    if hip_angle < 140:  # かなり小さい
+                        feedback.append(f"股関節の伸展が足りません（現在: {hip_angle:.1f}°）。もっと大きく股関節を伸ばしてください。")
+                    elif hip_angle < 150:  # やや小さい
+                        feedback.append(f"股関節をもう少し伸ばしてください（現在: {hip_angle:.1f}°）。")
+                    elif hip_angle > 180:  # かなり大きい
+                        feedback.append(f"股関節の伸展が強すぎます（現在: {hip_angle:.1f}°）。伸ばしすぎないように注意してください。")
+                    elif hip_angle > 170:  # やや大きい
+                        feedback.append(f"股関節の伸展をやや抑えてください（現在: {hip_angle:.1f}°）。")
+                    
+                    # 離地時の膝関節角度チェック
+                    if knee_angle < 135:  # かなり小さい
+                        feedback.append(f"膝の伸展が不十分です（現在: {knee_angle:.1f}°）。力強く伸ばしてください。")
+                    elif knee_angle < 145:  # やや小さい
+                        feedback.append(f"膝をもう少し伸ばしてください（現在: {knee_angle:.1f}°）。")
+                    elif knee_angle > 185:  # かなり大きい
+                        feedback.append(f"膝の伸展が強すぎます（現在: {knee_angle:.1f}°）。")
+                    # elif knee_angle > 175:  # やや大きい
+                    #     feedback.append(f"膝の伸展をやや抑えてください（現在: {knee_angle:.1f}°）。")
                         
                 elif event == "down":
-                    # 接地時の角度チェック
-                    if not 100 <= knee_angle <= 140:  # 120±20
-                        feedback.append(f"Knee joint angle at touchdown: {knee_angle:.1f} (Target: 100-140)")
+                    # 接地時の膝関節角度チェック
+                    if knee_angle < 90:  # かなり小さい
+                        feedback.append(f"着地時の膝の屈曲が大きすぎます（現在: {knee_angle:.1f}°）。膝を伸ばして着地してください。")
+                    elif knee_angle < 100:  # やや小さい
+                        feedback.append(f"着地時の膝をもう少し伸ばしてください（現在: {knee_angle:.1f}°）。")
+                    elif knee_angle > 150:  # かなり大きい
+                        feedback.append(f"着地時の膝が伸びすぎています（現在: {knee_angle:.1f}°）。もっと膝を曲げてください。")
+                    elif knee_angle > 140:  # やや大きい
+                        feedback.append(f"着地時にもう少し膝を曲げてください（現在: {knee_angle:.1f}°）。")
                         
             return feedback
         
-        def draw_feedback(image, feedback):
-            # OpenCVの画像をPillowに変換
-            img_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            draw = ImageDraw.Draw(img_pil)
+        # def draw_feedback(image, feedback):
+        #     img_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        #     draw = ImageDraw.Draw(img_pil)
 
-            # 日本語対応フォントを指定
-            font = ImageFont.truetype("C:/Windows/Fonts/meiryo.ttc", 20)  # フォントパスを指定
+        #     # Linux用の一般的な日本語フォントパスを試行
+        #     font_paths = [
+        #         "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+        #         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        #         "/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf"
+        #     ]
 
-            y_offset = 10
-            for message in feedback:
-                draw.text((10, y_offset), message, font=font, fill=(255, 255, 255))
-                y_offset += 30  # 次の行に移動
+        #     font = None
+        #     for path in font_paths:
+        #         try:
+        #             font = ImageFont.truetype(path, 20)
+        #             break
+        #         except OSError:
+        #             continue
 
-            # Pillowの画像をOpenCV形式に変換
-            image = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-            return image
+        #     if font is None:
+        #         # フォントが見つからない場合はデフォルトフォントを使用
+        #         font = ImageFont.load_default()
+
+        #     y_offset = 10
+        #     for message in feedback:
+        #         draw.text((10, y_offset), message, font=font, fill=(255, 255, 255))
+        #         y_offset += 30
+
+        #     return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
         if len(pts) > 0:
             # 人物が検出された場合の処理
             keypoints = pts[0]  # 最初の検出人物のみ使用
-            phase_change, knee_angle,hip_angles = phase_detector.detect_phase_change(keypoints,frame_count)
+            phase_change,knee_angle,hip_angles = phase_detector.detect_phase_change(keypoints,frame_count)
 
             # 角度を右上に表示
             frame_with_info = frame.copy()
@@ -254,7 +326,22 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
             #             cv2.FONT_HERSHEY_SIMPLEX,
             #             0.7, (0, 0, 255), 2)  # 赤色で表示
             feedback = check_joint_angles(phase_change, hip_angles, knee_angle)
-            frame_with_info = draw_feedback(frame_with_info, feedback)
+            # フィードバックの各行を表示（下部に配置）
+            height = frame_with_info.shape[0]
+            margin_bottom = 50
+            line_height = 40
+
+            # フィードバックの各行を下から順に表示
+            for i, text in enumerate(reversed(feedback)):
+                y_pos = height - margin_bottom - i * line_height
+                frame_with_info = put_japanese_text(
+                    frame_with_info, 
+                    text,
+                    (50, y_pos),
+                    30,
+                    (0, 0, 255)  # BGR
+                )
+            
             
             if phase_change:
                 sequence_num, event = phase_change
@@ -296,7 +383,8 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
     # if save_video:
     #     output_video.release()
     video.release()
-    accuracy = phase_detector.compare_frames([12,20,51,65,96,108,142,158])
+    #accuracy = phase_detector.compare_frames([173,184,188,198,203,211,216]) #b1
+    accuracy = phase_detector.compare_frames([132,140,145,155,159,169]) #b2
     print(f"Accuracy: {accuracy:.2f}")
 
 
