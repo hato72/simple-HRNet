@@ -96,11 +96,15 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
         takeoff_angle=165,   # 離地時の目標角度
         angle_tolerance=10   # 許容誤差
     )
+    video_name = os.path.basename(filename)
+    # 拡張子を除去
+    video_name = os.path.splitext(video_name)[0]
+    save_dir = f"{video_name}_result"
     #save_dir = "gait_images"  # 保存ディレクトリ
     #save_dir = "a_result"  # 保存ディレクトリ
     #save_dir = "b1_result"  # 保存ディレクトリ
-    save_dir = "b2_result"  # 保存ディレクトリ
     #save_dir = "b4_result"  # 保存ディレクトリ
+    #save_dir = "b5_result"  # 保存ディレクトリ
     os.makedirs(save_dir, exist_ok=True)
 
     detection_threshold = 0.1  # 例: しきい値を下げる
@@ -227,34 +231,34 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
                 if event == "takeoff":
                     # 離地時の股関節角度チェック
                     if hip_angle < 140:  # かなり小さい
-                        feedback.append(f"股関節の伸展が足りません（現在: {hip_angle:.1f}°）。もっと大きく股関節を伸ばしてください。")
+                        feedback.append(f"股関節の伸展が足りません（現在: {hip_angle:.1f}°　目標：{TAKEOFF_HIP_IDEAL}°）。\n もっと大きく股関節を伸ばしてください。")
                     elif hip_angle < 150:  # やや小さい
-                        feedback.append(f"股関節をもう少し伸ばしてください（現在: {hip_angle:.1f}°）。")
+                        feedback.append(f"股関節をもう少し伸ばしてください（現在: {hip_angle:.1f}°　目標：{TAKEOFF_HIP_IDEAL}°）。")
                     elif hip_angle > 180:  # かなり大きい
-                        feedback.append(f"股関節の伸展が強すぎます（現在: {hip_angle:.1f}°）。伸ばしすぎないように注意してください。")
+                        feedback.append(f"股関節の伸展が強すぎます（現在: {hip_angle:.1f}°　目標：{TAKEOFF_HIP_IDEAL}°）。\n 伸ばしすぎないように注意してください。")
                     elif hip_angle > 170:  # やや大きい
-                        feedback.append(f"股関節の伸展をやや抑えてください（現在: {hip_angle:.1f}°）。")
+                        feedback.append(f"股関節の伸展をやや抑えてください（現在: {hip_angle:.1f}°　目標：{TAKEOFF_HIP_IDEAL}°）。")
                     
                     # 離地時の膝関節角度チェック
                     if knee_angle < 135:  # かなり小さい
-                        feedback.append(f"膝の伸展が不十分です（現在: {knee_angle:.1f}°）。力強く伸ばしてください。")
+                        feedback.append(f"膝の伸展が不十分です（現在: {knee_angle:.1f}°　目標：{TAKEOFF_KNEE_IDEAL}°）。\n 力強く伸ばしてください。")
                     elif knee_angle < 145:  # やや小さい
-                        feedback.append(f"膝をもう少し伸ばしてください（現在: {knee_angle:.1f}°）。")
+                        feedback.append(f"膝をもう少し伸ばしてください（現在: {knee_angle:.1f}°　目標：{TAKEOFF_KNEE_IDEAL}°）。")
                     elif knee_angle > 185:  # かなり大きい
-                        feedback.append(f"膝の伸展が強すぎます（現在: {knee_angle:.1f}°）。")
+                        feedback.append(f"膝の伸展が強すぎます（現在: {knee_angle:.1f}°　目標：{TAKEOFF_KNEE_IDEAL}°）。")
                     # elif knee_angle > 175:  # やや大きい
                     #     feedback.append(f"膝の伸展をやや抑えてください（現在: {knee_angle:.1f}°）。")
                         
                 elif event == "down":
                     # 接地時の膝関節角度チェック
-                    if knee_angle < 90:  # かなり小さい
-                        feedback.append(f"着地時の膝の屈曲が大きすぎます（現在: {knee_angle:.1f}°）。膝を伸ばして着地してください。")
-                    elif knee_angle < 100:  # やや小さい
-                        feedback.append(f"着地時の膝をもう少し伸ばしてください（現在: {knee_angle:.1f}°）。")
-                    elif knee_angle > 150:  # かなり大きい
-                        feedback.append(f"着地時の膝が伸びすぎています（現在: {knee_angle:.1f}°）。もっと膝を曲げてください。")
+                    # if knee_angle < 90:  # かなり小さい
+                    #     feedback.append(f"着地時の膝の屈曲が大きすぎます（現在: {knee_angle:.1f}°　目標：{TOUCHDOWN_KNEE_IDEAL}°）。膝を伸ばして着地してください。")
+                    if knee_angle < 100:  # やや小さい
+                        feedback.append(f"着地時の膝をもう少し伸ばしてください（現在: {knee_angle:.1f}°　目標：{TOUCHDOWN_KNEE_IDEAL}°）。")
+                    # elif knee_angle > 150:  # かなり大きい
+                    #     feedback.append(f"着地時の膝が伸びすぎています（現在: {knee_angle:.1f}°　目標：{TOUCHDOWN_KNEE_IDEAL}°）。もっと膝を曲げてください。")
                     elif knee_angle > 140:  # やや大きい
-                        feedback.append(f"着地時にもう少し膝を曲げてください（現在: {knee_angle:.1f}°）。")
+                        feedback.append(f"着地時にもう少し膝を曲げてください（現在: {knee_angle:.1f}°　目標：{TOUCHDOWN_KNEE_IDEAL}°）。")
                         
             return feedback
         
@@ -307,14 +311,14 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
                       (10, 30),  # 左上に固定
                       cv2.FONT_HERSHEY_SIMPLEX, 
                       1, 
-                      (0, 255, 0), 
+                      (0, 0, 255), 
                       2)
             cv2.putText(frame_with_info, 
                       f"Hip Angle: {hip_angles:.1f}", 
                       (10, 70),  # 膝関節角度の下に表示
                       cv2.FONT_HERSHEY_SIMPLEX, 
                       1, 
-                      (0, 255, 0), 
+                      (0, 0, 255), 
                       2)
             
             # フィードバックを表示
@@ -337,9 +341,9 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
                 frame_with_info = put_japanese_text(
                     frame_with_info, 
                     text,
-                    (50, y_pos),
+                    (50, y_pos-50),
                     30,
-                    (0, 0, 255)  # BGR
+                    (255,255,255)  # RGB
                 )
             
             
@@ -384,7 +388,22 @@ def main(camera_id, filename, hrnet_m, hrnet_c, hrnet_j, hrnet_weights, hrnet_jo
     #     output_video.release()
     video.release()
     #accuracy = phase_detector.compare_frames([173,184,188,198,203,211,216]) #b1
-    accuracy = phase_detector.compare_frames([132,140,145,155,159,169]) #b2
+    #accuracy = phase_detector.compare_frames([132,140,145,155,159,169]) #b2
+    #accuracy = phase_detector.compare_frames([129, 137, 142, 152, 156, 168, 172]) #b3
+    #accuracy = phase_detector.compare_frames([75,82,88,96,101,110,115,125,130]) #b4
+    #accuracy = phase_detector.compare_frames([84, 92, 98, 106, 111, 121, 126]) #b5
+    #accuracy = phase_detector.compare_frames([91, 98, 103, 111, 116, 124, 129, 141]) #b6
+    #accuracy = phase_detector.compare_frames([138, 145, 151, 160, 165, 174, 178, 187]) #b7
+    #accuracy = phase_detector.compare_frames([129, 137, 142, 151, 155, 164, 169, 178, 183]) #b8
+    #accuracy = phase_detector.compare_frames([38, 47, 51, 61, 65, 74, 78, 87, 92]) #b9
+    #accuracy = phase_detector.compare_frames([72, 81, 86, 94, 97, 107, 111, 121, 125]) #b10
+    #accuracy = phase_detector.compare_frames([80, 89, 94, 102, 107, 116, 120, 129, 135]) #b11
+    #accuracy = phase_detector.compare_frames([4, 11, 16, 24, 29, 38, 42]) #b12
+    #accuracy = phase_detector.compare_frames([263, 273, 278, 286, 291, 300, 304, 314, 318]) #b13
+    #accuracy = phase_detector.compare_frames([108, 116, 120, 132, 136, 147]) #b14
+    #accuracy = phase_detector.compare_frames([39, 47, 52, 62, 67, 77, 81]) #b15
+
+    accuracy = phase_detector.compare_frames([168, 178, 182, 192, 197, 206, 211]) #a1
     print(f"Accuracy: {accuracy:.2f}")
 
 
