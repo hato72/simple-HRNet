@@ -1,69 +1,8 @@
-# # gait_phase_detector.py
-# import numpy as np
-# from collections import deque
-
-# class GaitPhaseDetector:
-#     def __init__(self, window_size=5, height_threshold=3):
-#         self.window_size = window_size
-#         self.height_threshold = height_threshold
-#         self.left_ankle_heights = deque(maxlen=window_size)
-#         self.right_ankle_heights = deque(maxlen=window_size)
-#         self.left_phase = None  # "stance" or "swing"
-#         self.right_phase = None
-        
-#     def detect_phase_change(self, keypoints):
-#         # COCOフォーマットでの足首のインデックス
-#         LEFT_ANKLE_IDX = 15
-#         RIGHT_ANKLE_IDX = 16
-        
-#         # 足首の位置を取得
-#         left_ankle = keypoints[LEFT_ANKLE_IDX]
-#         right_ankle = keypoints[RIGHT_ANKLE_IDX]
-        
-#         # y座標を記録 (画像座標系なので、値が大きいほど下)
-#         self.left_ankle_heights.append(left_ankle[1])
-#         self.right_ankle_heights.append(right_ankle[1])
-        
-#         phase_changes = []
-        
-#         if len(self.left_ankle_heights) == self.window_size:
-#             # 移動平均による平滑化
-#             left_heights = np.array(self.left_ankle_heights)
-#             right_heights = np.array(self.right_ankle_heights)
-            
-#             # 傾きを計算
-#             left_slope = np.mean(np.diff(left_heights))
-#             right_slope = np.mean(np.diff(right_heights))
-            
-#             # 左足の判定
-#             if self.left_phase == "swing" and left_slope > self.height_threshold:
-#                 # 下降傾向で接地と判定
-#                 phase_changes.append(("left", "touchdown"))
-#                 self.left_phase = "stance"
-#             elif self.left_phase == "stance" and left_slope < -self.height_threshold:
-#                 # 上昇傾向で離地と判定
-#                 phase_changes.append(("left", "takeoff"))
-#                 self.left_phase = "swing"
-#             elif self.left_phase is None:
-#                 self.left_phase = "stance"
-            
-#             # 右足の判定
-#             if self.right_phase == "swing" and right_slope > self.height_threshold:
-#                 phase_changes.append(("right", "touchdown"))
-#                 self.right_phase = "stance"
-#             elif self.right_phase == "stance" and right_slope < -self.height_threshold:
-#                 phase_changes.append(("right", "takeoff"))
-#                 self.right_phase = "swing"
-#             elif self.right_phase is None:
-#                 self.right_phase = "stance"
-                
-#         return phase_changes
-
 import numpy as np
 from collections import deque
 
 class GaitPhaseDetector:
-    def __init__(self, touchdown_angle=175, takeoff_angle=80, angle_tolerance=10):
+    def __init__(self, touchdown_angle, takeoff_angle, angle_tolerance=10):
         self.touchdown_angle = touchdown_angle
         self.takeoff_angle = takeoff_angle
         self.angle_tolerance = angle_tolerance
@@ -71,68 +10,218 @@ class GaitPhaseDetector:
         self.last_state = None
         self.min_frames_between_detections = 10
         self.frames_since_last_detection = 0
+        self.frame_num = 0
         self.min_frames_between_detections = 3  # 検出間隔を短縮
         self.debug = True  # デバッグ用フラグ
         self.detected_frames = []
+        self.prev_knee_angle = None
+        self.prev_hip_angle = None
+        self.current_sequence = 0
+        self.last_event_frame = 0
+        self.phase_changes = []
+        self.min_frames_between_events = 10
+        self.ankle_hip_x_threshold = 80
         
-    def calculate_angles(self, keypoints):
-        # COCOフォーマットでのインデックス
+    # def calculate_angles(self, keypoints):
+    #     # COCOフォーマットでのインデックス
+    #     RIGHT_HIP = 12
+    #     RIGHT_KNEE = 14
+    #     RIGHT_ANKLE = 16
+        
+    #     hip = keypoints[RIGHT_HIP]
+    #     knee = keypoints[RIGHT_KNEE]
+    #     ankle = keypoints[RIGHT_ANKLE]
+        
+    #     # 3点から角度を計算
+    #     vector1 = [hip[0] - knee[0], hip[1] - knee[1]]
+    #     vector2 = [ankle[0] - knee[0], ankle[1] - knee[1]]
+        
+    #     # 内積とベクトルの大きさから角度を計算
+    #     dot_product = vector1[0] * vector2[0] + vector1[1] * vector2[1]
+    #     magnitude1 = np.sqrt(vector1[0]**2 + vector1[1]**2)
+    #     magnitude2 = np.sqrt(vector2[0]**2 + vector2[1]**2)
+        
+    #     # cos_angle = dot_product / (magnitude1 * magnitude2)
+    #     # angle = np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
+        
+    #     # return angle
+
+    #     knee_angle = np.degrees(np.arccos(np.clip(dot_product / (magnitude1 * magnitude2), -1.0, 1.0)))
+
+    #     # 股関節角度の計算
+    #     vertical = [0, -1]  # 上向きの垂直ベクトル
+    #     thigh_vector = [knee[0] - hip[0], knee[1] - hip[1]]
+        
+    #     dot_product = vertical[0] * thigh_vector[0] + vertical[1] * thigh_vector[1]
+    #     magnitude_thigh = np.sqrt(thigh_vector[0]**2 + thigh_vector[1]**2)
+        
+    #     hip_angle = np.degrees(np.arccos(np.clip(dot_product / magnitude_thigh, -1.0, 1.0)))
+        
+    #     # 大腿部が垂直線の左側にある場合の補正
+    #     if thigh_vector[0] < 0:
+    #         hip_angle = 360 - hip_angle
+
+    #     return hip_angle, knee_angle
+
+    def calculate_angles(self, keypoints): #角度計算方法を修正
+        NECK = 1
         RIGHT_HIP = 12
         RIGHT_KNEE = 14
         RIGHT_ANKLE = 16
         
+        neck = keypoints[NECK]
         hip = keypoints[RIGHT_HIP]
         knee = keypoints[RIGHT_KNEE]
         ankle = keypoints[RIGHT_ANKLE]
         
-        # 3点から角度を計算
-        vector1 = [hip[0] - knee[0], hip[1] - knee[1]]
-        vector2 = [ankle[0] - knee[0], ankle[1] - knee[1]]
+        # 膝関節角度の計算（既存のコード）
+        knee_vector1 = [hip[0] - knee[0], hip[1] - knee[1]]
+        knee_vector2 = [ankle[0] - knee[0], ankle[1] - knee[1]]
         
-        # 内積とベクトルの大きさから角度を計算
-        dot_product = vector1[0] * vector2[0] + vector1[1] * vector2[1]
-        magnitude1 = np.sqrt(vector1[0]**2 + vector1[1]**2)
-        magnitude2 = np.sqrt(vector2[0]**2 + vector2[1]**2)
+        dot_product_knee = knee_vector1[0] * knee_vector2[0] + knee_vector1[1] * knee_vector2[1]
+        magnitude_knee1 = np.sqrt(knee_vector1[0]**2 + knee_vector1[1]**2)
+        magnitude_knee2 = np.sqrt(knee_vector2[0]**2 + knee_vector2[1]**2)
         
-        # cos_angle = dot_product / (magnitude1 * magnitude2)
-        # angle = np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
+        knee_angle = np.degrees(np.arccos(np.clip(dot_product_knee / (magnitude_knee1 * magnitude_knee2), -1.0, 1.0)))
         
-        # return angle
-
-        knee_angle = np.degrees(np.arccos(np.clip(dot_product / (magnitude1 * magnitude2), -1.0, 1.0)))
-
-        # 股関節角度の計算
-        vertical = [0, -1]  # 上向きの垂直ベクトル
+        # 股関節角度の計算（上半身と大腿部のベクトル）
+        trunk_vector = [neck[0] - hip[0], neck[1] - hip[1]]
         thigh_vector = [knee[0] - hip[0], knee[1] - hip[1]]
         
-        dot_product = vertical[0] * thigh_vector[0] + vertical[1] * thigh_vector[1]
+        dot_product_hip = trunk_vector[0] * thigh_vector[0] + trunk_vector[1] * thigh_vector[1]
+        magnitude_trunk = np.sqrt(trunk_vector[0]**2 + trunk_vector[1]**2)
         magnitude_thigh = np.sqrt(thigh_vector[0]**2 + thigh_vector[1]**2)
         
-        hip_angle = np.degrees(np.arccos(np.clip(dot_product / magnitude_thigh, -1.0, 1.0)))
+        hip_angle = np.degrees(np.arccos(np.clip(dot_product_hip / (magnitude_trunk * magnitude_thigh), -1.0, 1.0)))
         
-        # 大腿部が垂直線の左側にある場合の補正
-        if thigh_vector[0] < 0:
-            hip_angle = 360 - hip_angle
-
+        # # 大腿部が体幹の左側にある場合の補正
+        # cross_product = trunk_vector[0] * thigh_vector[1] - trunk_vector[1] * thigh_vector[0]
+        # if cross_product < 0:
+        #     hip_angle = 360 - hip_angle
+        
         return hip_angle, knee_angle
+    
+
+    # def calculate_leg_angle(self, keypoints):
+    #     """膝からくるぶしへの線分の角度を計算（水平を0度として右回り）"""
+    #     knee = keypoints[14]  # 右膝のインデックス
+    #     ankle = keypoints[16]  # 右くるぶしのインデックス
         
+    #     # ベクトルの計算
+    #     dx = ankle[0] - knee[0]
+    #     dy = ankle[1] - knee[1]
+        
+    #     # 角度の計算（ラジアンから度に変換）
+    #     angle = np.degrees(np.arctan2(dy, dx))
+        
+    #     # 角度を0-360の範囲に正規化
+    #     if angle < 0:
+    #         angle += 360
+            
+    #     return angle
+
+    # def is_knee_horizontal(self, keypoints, tolerance=15):
+    #     """膝の位置が水平に近いかを判定"""
+    #     hip = keypoints[12]  # 右股関節のインデックス
+    #     knee = keypoints[14]  # 右膝のインデックス
+        
+    #     # 膝の高さが股関節より下にあるか確認
+    #     if knee[1] <= hip[1]:
+    #         return False
+        
+    #     # 膝の水平度を確認
+    #     ankle = keypoints[16]  # 右くるぶしのインデックス
+    #     knee_angle = abs(np.degrees(np.arctan2(ankle[1] - knee[1], ankle[0] - knee[0])))
+        
+    #     return abs(knee_angle - 90) <= tolerance
+    
+    def calculate_leg_to_horizontal_angle(self, keypoints):
+        """膝からくるぶしへの線分と水平線のなす角度を計算（左回り）"""
+        knee = keypoints[14]  # 右膝のインデックス
+        ankle = keypoints[16]  # 右くるぶしのインデックス
+        
+        # ベクトルの計算
+        dx = ankle[0] - knee[0]
+        dy = ankle[1] - knee[1]
+        
+        # 角度の計算（ラジアンから度に変換）- 左回りで計算
+        angle = np.degrees(np.arctan2(-dy, dx))  # -dyで左回りに
+        
+        # # 角度を0-360の範囲に正規化
+        # if angle < 0:
+        #     angle += 360
+        #print("angle",angle)
+        return angle
+        
+
     def detect_phase_change(self, keypoints, frame_count):
         self.frames_since_last_detection += 1
+        self.frame_num += 1
         
-        if keypoints is None or len(keypoints) < 14:
+        if keypoints is None or len(keypoints) < 17:
             return None, 0,0
             
         hip_angle,knee_angle = self.calculate_angles(keypoints)
-        
+        #leg_angle = self.calculate_leg_angle(keypoints)
+       
         # デバッグ用出力
-        if self.debug:
-            print(f"Current knee angle: {knee_angle:.1f}")
-            print(f"Last state: {self.last_state}")
-            print(f"Frames since last: {self.frames_since_last_detection}")
-        
+        # if self.debug:
+        #     print(f"Current knee angle: {knee_angle:.1f}")
+        #     print(f"Current hip angle: {hip_angle:.1f}")
+        #     print(f"Last state: {self.last_state}")
+        #     print(f"Frames: {self.frame_num}")
+
+        print(f"xxxxx-------: {self.frame_num}")
+        leg_angle = self.calculate_leg_to_horizontal_angle(keypoints)
+        #print(f"leg_angle1: {leg_angle:.1f}")
         if self.frames_since_last_detection < self.min_frames_between_detections:
+            if self.debug:
+                print(f"Frames-------: {self.frame_num}")
+                print(f"Current knee angle: {knee_angle:.1f}")
+                print(f"Current hip angle: {hip_angle:.1f}")
+                print(f"Last state: {self.last_state}")
+                print(f"leg_angle: {leg_angle:.1f}")
             return None, knee_angle,hip_angle
-            
+        
+        
+        # 膝が水平で、脚の角度が80-120度の範囲内の場合に着地とみなす
+        # is_touchdown = (self.is_knee_horizontal(keypoints) and 
+        #                80 <= leg_angle <= 120 and 
+        #                frame_count - self.last_event_frame > self.min_frames_between_events)
+        # is_touchdown = (70 <= leg_angle <= 100 and 
+        #            frame_count - self.last_event_frame > self.min_frames_between_events)
+
+
+        # is_touchdown = (leg_angle <= 60 and hip_angle >= 60 and
+        #            frame_count - self.last_event_frame > self.min_frames_between_events)
+        
+        # if is_touchdown:
+        #     self.current_sequence += 1
+        #     self.sequence_number += 1
+        #     self.last_event_frame = frame_count
+        #     self.phase_changes.append((frame_count, "down"))
+        #     return (self.sequence_number, "down"), knee_angle, hip_angle
+
+        # 離地判定（既存のロジック）
+        # is_takeoff = (abs(knee_angle - self.takeoff_angle) <= self.angle_tolerance and
+        #              frame_count - self.last_event_frame > self.min_frames_between_events)
+
+        # if is_takeoff:
+        #     self.last_event_frame = frame_count
+        #     self.phase_changes.append((frame_count, "takeoff"))
+        #     return (self.sequence_number, "takeoff"), knee_angle, hip_angle
+
+        # self.prev_knee_angle = knee_angle
+        # self.prev_hip_angle = hip_angle
+        # return None, knee_angle, hip_angle
+        
+        #leg_angle2 = self.calculate_leg_to_horizontal_angle(keypoints)
+        if self.debug:
+            print(f"Frames-------: {self.frame_num}")
+            print(f"Current knee angle: {knee_angle:.1f}")
+            print(f"Current hip angle: {hip_angle:.1f}")
+            print(f"Last state: {self.last_state}")
+            print(f"leg_angle: {leg_angle:.1f}")
         # 着地判定の条件を微調整
         knee_range = 20  # 許容範囲を広げる
         if ((self.takeoff_angle - knee_range <= knee_angle <= self.takeoff_angle + knee_range) and
@@ -147,8 +236,9 @@ class GaitPhaseDetector:
 
         # elif (abs(knee_angle - self.touchdown_angle) < self.angle_tolerance and 
         #       self.last_state != "down"):
-        elif ((self.takeoff_angle - self.angle_tolerance <= knee_angle <= self.takeoff_angle + self.angle_tolerance) and
-            self.last_state != "down"):
+        elif (leg_angle <= 60 and 80 <= hip_angle <= 125 and 120 <= knee_angle <= 160 and
+            self.last_state == "takeoff"):
+
             self.last_state = "down"
             self.frames_since_last_detection = 0
             self.sequence_number += 1
@@ -163,6 +253,7 @@ class GaitPhaseDetector:
     def compare_frames(self, manual_frames, threshold=3):
         correct_detections = 0
         matched_frames = []  # デバッグ用：マッチしたフレームのペアを保存
+        detect_frame = self.detected_frames.copy()
     
         for manual_frame in manual_frames:
             found_match = False
@@ -170,6 +261,7 @@ class GaitPhaseDetector:
                 if abs(manual_frame - detected_frame) <= threshold:
                     correct_detections += 1
                     matched_frames.append((manual_frame, detected_frame))
+                    self.detected_frames.remove(detected_frame)
                     found_match = True
                     break
             if not found_match:
@@ -177,7 +269,7 @@ class GaitPhaseDetector:
         
         accuracy = correct_detections / len(manual_frames) if manual_frames else 0
         print(f"Manual frames: {manual_frames}")
-        print(f"Detected frames: {self.detected_frames}")
+        print(f"Detected frames: {detect_frame}")
         print(f"Matched pairs: {matched_frames}")
         # print(f"Accuracy: {accuracy:.2%} ({correct_detections}/{len(manual_frames)})")
         return accuracy
