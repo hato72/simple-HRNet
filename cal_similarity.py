@@ -127,6 +127,12 @@ import cv2
 import numpy as np
 from pynput import keyboard
 import os
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--video', required=True, help='Path to video file')
+    return parser.parse_args()
 
 class VideoAnalyzer:
     def __init__(self, video_path):
@@ -136,7 +142,12 @@ class VideoAnalyzer:
         self.delay = 200
         self.current_frame = None  # 現在のフレームを保持
         
-        self.capture_dir = "capture"
+        #self.capture_dir = "capture_b"
+        #self.capture_dir = "capture_b2"
+        #self.capture_dir = "capture_b4"
+        # 動画ファイル名から保存ディレクトリ名を生成
+        video_name = os.path.splitext(os.path.basename(video_path))[0]
+        self.capture_dir = f"capture_{video_name}"
         if not os.path.exists(self.capture_dir):
             os.makedirs(self.capture_dir)
 
@@ -179,12 +190,16 @@ class VideoAnalyzer:
             
             if cv2.waitKey(self.delay) & 0xFF == ord('q'):
                 break
+        print(self.manual_frames)
 
     def predict_frame(self, frame):
         # ここにモデルによるフレーム予測の実装
         # 仮の実装として現在のフレーム番号を返す
         return self.frame_count
     
+if __name__ == "__main__":
+    args = parse_args()
+    analyzer = VideoAnalyzer(args.video)
+    analyzer.analyze()
 
-analyzer = VideoAnalyzer("running.mp4")
-analyzer.analyze()
+# python3 cal_similarity.py --video movie2/b5.mp4
