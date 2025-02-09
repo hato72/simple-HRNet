@@ -1,7 +1,7 @@
 ## 資料
-https://docs.google.com/presentation/d/1D9Gk-8ynefuxQkzZ9YSeowvuuJGmdbvg/edit?usp=drive_link&ouid=111798389918963487681&rtpof=true&sd=true
+https://drive.google.com/file/d/1Jmi1VMNIgFkRcKe2j3ulD93MiaokAee6/view?usp=drive_link
 
-### 実行
+### 実行例
 ```
 python3  scripts/live-demo.py --filename movie1/a1.mp4
 ```
